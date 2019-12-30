@@ -27,6 +27,7 @@ def read_network_from_file(file_name):
     if file_name.lower().endswith('.csv'):
         try:
             G = nx.from_pandas_edgelist(pd.read_csv(file_name))
+            return G
         except FileNotFoundError:
             print('Could not find the file. Make sure the path and file extension are correct.')
         except:
@@ -34,6 +35,7 @@ def read_network_from_file(file_name):
     if file_name.lower().endswith(('.xls','.xlsx')):
         try:
             G=nx.from_pandas_edgelist(pd.read_excel(file_name))
+            return G
         except FileNotFoundError:
             print('Could not find the file. Make sure the path and file extension are correct.')
         except:
@@ -41,9 +43,10 @@ def read_network_from_file(file_name):
     if file_name.lower().endswith(('.net','.pajek')):
         try:
             G=nx.read_pajek(file_name)
+            return G
         except FileNotFoundError:
             print('Could not find the file. Make sure the path and file extension are correct.')
-    return G
+    
 
 def network_selector(network,N,p=0,m=0,path=''):
     """ This function provides a simple generator of random networks.
@@ -238,9 +241,11 @@ def plot_random_graph(n=10,p=.12,Attribute='',layout='Circle',types=False,n1=0,p
         between a random graph and a two-group random graph to study homophily in the intercative
         notebook.
     """
+    global edgelist_h
     if types == False:
         G = nx.erdos_renyi_graph(n, p, seed=65489, directed=False)
         plot_simple_graph(G,Attribute,layout=layout,G_nodes=[])
+        edgelist_h = nx.to_pandas_edgelist(G)
     if types == True:
         P = [[p1,px,0,0,0,0,0,0],[px,p2,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],
               [0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]]
@@ -248,7 +253,8 @@ def plot_random_graph(n=10,p=.12,Attribute='',layout='Circle',types=False,n1=0,p
                      n6=0,n7=0,n8=0,                     
                      P=P)
         plot_block_graph(G, partition_label=block,fig_dim=8,Attribute=Attribute,layout=layout,seed=65489)
-
+        edgelist_h = nx.to_pandas_edgelist(G)
+        
 def homophily_stats(G,type_id='block'):
     """ This function computes the extend to which nodes of a given type tend to associate with others
         of the same type beyond what would be expected if meetings happened at random.
@@ -503,6 +509,55 @@ def finance_network_eq(Q,p,S,D1,beta=.1,case='worst',tol=.01,max_iter = 1000):
         
     return V1, insolvent_institutions
     
+# DeGroot's Model
+def beliefs_at_time(T,P0,t):
+    """
+    This function computes the vector of beliefs at time t for a learning network represented
+    by trust network T and initial belief vector P0.
+    """
+    T = np.asarray(T)
+    P0 = np.transpose(np.asarray(P0))
+    n, m = T.shape
+    N = P0.size
+    if (n!=m) or (m!=N):
+        print("Trust matrix should be squared and number of agents should be consistent in T and P0.")
+        return
+    rowsum = np.sum(T,axis=1)
+    if (np.any(rowsum != np.ones(N))) or (np.any(T<0)):
+        print("Trust matrix should be row-stochastic, that is rows need to add up to one and have non-negative entries.")
+        return
+    return np.linalg.matrix_power(T,t).dot(P0)
+     
+def time_to_convergence(T,P0,final_beliefs=False,tolerance=0,max_iter=10000):
+    """
+    This function calculates the number of periods that it takes for opinions to stop changing in the DeGroot Model.
+    Optionally, one can also get the final belief profile.
+    """
+    T = np.asarray(T)
+    P0 = np.transpose(np.asarray(P0))
+    n, m = T.shape
+    N = P0.size
+    if (n!=m) or (m!=N):
+        print("Trust matrix should be squared and number of agents should be consistent in T and P0.")
+        return
+    rowsum = np.sum(T,axis=1)
+    if (np.any(rowsum != np.ones(N))) or (np.any(T<0)):
+        print("Trust matrix should be row-stochastic, that is rows need to add up to one and have non-negative entries.")
+        return
+    t = 1
+    N = P0.size
+    P1 = P0
+    P0 =  T.dot(P1)
+    while (t<max_iter) and (np.linalg.norm(P0-P1)>tolerance):
+        P1 = P0
+        P0 = T.dot(P1)
+        t = t+1
+
+     
+    if final_beliefs == True:
+        return t, P0
+    else:
+        return t
     
 #---------------------------------#
 # INTERACTIVE INTERFACE FUNCTIONS # 
@@ -582,7 +637,7 @@ dutch_lays = widgets.ToggleButtons(
 
 dutch_atts = widgets.Dropdown(
     options=['','Degree Centrality','Clustering Centrality',
-                         'Betweenness Centrality','Eigenvector Centrality','Diffusion Centrality'],
+                         'Betweenness Centrality','Eigenvector Centrality'], #,'Diffusion Centrality'],
     value='',
     description='Attribute:',
     disabled=False,
@@ -594,12 +649,12 @@ dutch_atts = widgets.Dropdown(
 def dutch_update_attributes(*args):
     if dutch_types.value=='None':
         dutch_atts.options=['','Degree Centrality','Clustering Centrality',
-                         'Betweenness Centrality','Eigenvector Centrality','Diffusion Centrality']
+                         'Betweenness Centrality','Eigenvector Centrality'] #,'Diffusion Centrality']
         dutch_atts.value = ''
     else:
         dutch_atts.options=['','Degree Centrality','Clustering Centrality',
-                         'Betweenness Centrality','Eigenvector Centrality','Diffusion Centrality',
-              'Relative Homophily','Inbreeding Homophily']
+                         'Betweenness Centrality','Eigenvector Centrality'] #,'Diffusion Centrality',
+              #'Relative Homophily','Inbreeding Homophily']
 
 dutch_types.observe(dutch_update_attributes)
 
@@ -672,7 +727,7 @@ def compare_net_plot(G1,G2,network1,network2,layout):
     vals1 = list(nx.eigenvector_centrality_numpy(G1).values())
     vals2 = list(nx.eigenvector_centrality_numpy(G2).values())
      
-    hist_attribute_distribution(vals1,vals2,'Cumulative Eigenvector Centrality Distribution',network1,network2,ax)
+    hist_attribute_distribution(vals1,vals2,'Cumulative Clustering Centrality Distribution',network1,network2,ax)
     
     ax = pl.subplot(gs[2, 0])
     vals1 = list(nx.betweenness_centrality(G1).values())
@@ -686,7 +741,7 @@ def compare_net_plot(G1,G2,network1,network2,layout):
     vals2 = list(diffusion_centrality(G2).values())
     vals2 = [float(a) for a in vals2]
     
-    hist_attribute_distribution(vals1,vals2,'Cumulative Diffusion Centrality Distribution',network1,network2,ax)
+    hist_attribute_distribution(vals1,vals2,'Cumulative Eigenvector Centrality Distribution',network1,network2,ax)
    
     pl.tight_layout()
 
@@ -759,7 +814,7 @@ comp_m2=widgets.BoundedIntText(
 comp_path2 = widgets.Text(
     placeholder='Path to network file',
     description='File Path:',
-    disabled=True
+    disabled=False
 )
 
 Network1 = widgets.ToggleButtons(
@@ -839,8 +894,9 @@ def comp_update1(*args):
         comp_m1.description='Degree'
         comp_p1.description='Prob. Rewiring'
         comp_p1.min=0
+        comp_p1.disabled=False
         comp_m1.disabled=False
-        comp_N1.value = N1.value
+        comp_N1.value = comp_N1.value
     elif Network1.value=='Newman-Watts-Strogatz':
         comp_m1.description='Degree'
         comp_p1.description='Prob. Adding New Edge'
@@ -856,7 +912,7 @@ def comp_update1(*args):
         comp_m1.disabled=True
         comp_m1.min=0
         comp_m1.value=0
-        comp_N1.value = N1.value
+        comp_N1.value = comp_N1.value
     elif Network1.value=='Regular Network':
         comp_m1.description='Degree'
         comp_p1.description=''
@@ -907,6 +963,7 @@ def comp_update2(*args):
         comp_m2.description='Degree'
         comp_p2.description='Prob. Rewiring'
         comp_p2.min=0
+        comp_p2.disabled=False
         comp_m2.disabled=False
         comp_N2.value = comp_N2.value
     elif Network2.value=='Newman-Watts-Strogatz':
@@ -1061,7 +1118,7 @@ def update(*args):
     n2_h.max = N_h.value
     N_h.value = n1_h.value + n2_h.value
     p_h.value = p_h.value
-    
+    types_h.value = types_h.value 
 
 def update_n1_h(*args):
     n1_h.value = N_h.value-n2_h.value
