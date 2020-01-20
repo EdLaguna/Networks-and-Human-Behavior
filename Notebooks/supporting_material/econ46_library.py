@@ -1,6 +1,6 @@
 # This file contains a handful of functions specifically writen for Econ 46
 # Created: May 27th 2019, Eduardo Laguna Muggenburg
-# Last Modified: June 14th 2019, Eduardo Laguna Muggenburg
+# Last Modified: Jan 8th 2019, Eduardo Laguna Muggenburg
 
 # Housekeeping: Importing packages
 import matplotlib.pyplot as plt
@@ -867,16 +867,19 @@ comp_y= widgets.interactive_output(compare_interactive, {'network1': Network1, '
 def comp_update1(*args):
     comp_accordion.set_title(0, Network1.value)
     if Network1.value=='Erdos-Renyi':
+        comp_N1.disabled=False
         comp_m1.disabled=True
         comp_p1.disabled=False
         comp_p1.min=0
         comp_p1.description='Probability of Edge'
         comp_m1.description=''
         comp_N1.value = comp_N1.value
+        comp_N1.value = comp_N1.value
     elif Network1.value=='Barabasi Albert':
         comp_m1.disabled=False
         comp_p1.disabled=True
         comp_p1.description=''
+        comp_N1.disabled=False
         comp_m1.description='Degree of New Node'
         comp_p1.value=0
         comp_m1.min=1
@@ -887,6 +890,7 @@ def comp_update1(*args):
         comp_p1.description='Prob. Adding Triangles'
         comp_p1.min=.01
         comp_p1.disabled=False
+        comp_N1.disabled=False
         comp_m1.disabled=False
         comp_N1.value = comp_N1.value
     elif Network1.value=='Watts-Strogatz':
@@ -894,12 +898,14 @@ def comp_update1(*args):
         comp_m1.description='Degree'
         comp_p1.description='Prob. Rewiring'
         comp_p1.min=0
+        comp_N1.disabled=False
         comp_p1.disabled=False
         comp_m1.disabled=False
         comp_N1.value = comp_N1.value
     elif Network1.value=='Newman-Watts-Strogatz':
         comp_m1.description='Degree'
         comp_p1.description='Prob. Adding New Edge'
+        comp_N1.disabled=False
         comp_m1.disabled=False
         comp_p1.min=0
         comp_m1.min=1
@@ -909,6 +915,7 @@ def comp_update1(*args):
         comp_p1.description=''
         comp_p1.value=0
         comp_p1.disabled=True
+        comp_N1.disabled=False
         comp_m1.disabled=True
         comp_m1.min=0
         comp_m1.value=0
@@ -916,6 +923,7 @@ def comp_update1(*args):
     elif Network1.value=='Regular Network':
         comp_m1.description='Degree'
         comp_p1.description=''
+        comp_N1.disabled=False
         comp_p1.value=0
         comp_p1.disabled=True
         comp_m1.disabled=False
