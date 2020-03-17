@@ -1,6 +1,6 @@
 # This file contains a handful of functions specifically writen for Econ 46
 # Created: May 27th 2019, Eduardo Laguna Muggenburg
-# Last Modified: Jan 8th 2019, Eduardo Laguna Muggenburg
+# Last Modified: Feb 18th 2020, Eduardo Laguna Muggenburg
 
 # Housekeeping: Importing packages
 import matplotlib.pyplot as plt
@@ -13,7 +13,8 @@ from ipywidgets import interact, interactive, fixed, interact_manual
 import ipywidgets as widgets       
 import matplotlib.gridspec as gridspec
 import matplotlib.pylab as pl   
-    
+import random as rn
+
 # Reading edgelists
 def read_network_from_file(file_name):
     """ This function takes a file name (and path) and returns a network
@@ -232,9 +233,76 @@ def plot_block_graph(G, partition_label, Attribute='',layout='Spring',
           fancybox=True, shadow=True, ncol=5,title=type_description)
 
     plt.tight_layout()       
-    plt.show()
+    plt.show() 
+
     
+# Dynamic Network Formation Models
+def g_uniform(N,m):
+    """ This function simulaltes a random netowrk fomration model in which nodes enter the network one by one
+        and form m links with existing nodes at random.    
+    """
+    # Start with m nodes all friends with each other to initialize the process.
+    G_u = nx.complete_graph(m)
+
+    # add each subsequent node 
+    for node in range(m,N):
+        G_u.add_node(node)
+        # randomly select m existing nodes to create links
+        for node_j in rn.sample(list(range(node)), m):
+            G_u.add_edge(node,node_j)
     
+    return G_u
+
+def g_hybrid(N,m,a):
+    """ This function simulaltes a random netowrk fomration model in which nodes enter the network one by one
+        and form m links with existing nodes at a fraction (a) of the links are created uniformly at random
+        while teh rest (1-a) are created with probability proportional to existing nodes. 
+    """
+    # Start with m nodes all friends with each other to initialize the process.
+    G_h = nx.complete_graph(m)
+
+    # add each subsequent node 
+    for node in range(m,N):
+        G_h.add_node(node)
+        m_random = int(np.ceil(a*m))
+        m_pa = m - m_random
+        # randomly select m_random existing nodes to create links
+        for node_j in rn.sample(list(range(node)), m_random):
+            G_h.add_edge(node,node_j)
+        # add m_pa more edges to existing nodes with probability proportional to degree
+        node_sublist = list(range(4))
+        degree_sublist = list(dict(G_h.degree(list(range(4)))).values())
+        repeated_list = [item for item, count in zip(node_sublist, degree_sublist) for i in range(count)]
+        for node_j in rn.sample(repeated_list, m_pa):
+            G_h.add_edge(node,node_j)
+    
+    return G_h
+
+def g_friends_of_friends(N,m,a):
+    """ This function simulaltes a random netowrk fomration model in which nodes enter the network one by one
+        and form m links with existing nodes at a fraction (a) of the links are created uniformly at random
+        while the rest (1-a) are created by connecting to friends of the firstly created links.     
+    """
+    # Start with m nodes all friends with each other to initialize the process.
+    G_fof = nx.complete_graph(m)
+
+    # add each subsequent node 
+    for node in range(m,N):
+        G_fof.add_node(node)
+        m_random = int(np.ceil(a*m))
+        m_fof = m - m_random
+        # randomly select m_random existing nodes to create links
+        friends_of_friends = [] 
+        for node_j in rn.sample(list(range(node)), m_random):
+            G_fof.add_edge(node,node_j)
+            friends_of_friends = friends_of_friends+[n for n in G_fof.neighbors(node_j)]
+        for node_j in rn.sample(friends_of_friends, m_fof):
+            G_fof.add_edge(node,node_j)
+    
+    return G_fof
+    
+
+
 # Random networks
 def plot_random_graph(n=10,p=.12,Attribute='',layout='Circle',types=False,n1=0,p1=.1,p2=.1,px=0): 
     """ This function wraps the plotting functions from above to generate a quick comparison
@@ -522,10 +590,6 @@ def beliefs_at_time(T,P0,t):
     if (n!=m) or (m!=N):
         print("Trust matrix should be squared and number of agents should be consistent in T and P0.")
         return
-    rowsum = np.sum(T,axis=1)
-    if (np.any(rowsum != np.ones(N))) or (np.any(T<0)):
-        print("Trust matrix should be row-stochastic, that is rows need to add up to one and have non-negative entries.")
-        return
     return np.linalg.matrix_power(T,t).dot(P0)
      
 def time_to_convergence(T,P0,final_beliefs=False,tolerance=0,max_iter=10000):
@@ -539,10 +603,6 @@ def time_to_convergence(T,P0,final_beliefs=False,tolerance=0,max_iter=10000):
     N = P0.size
     if (n!=m) or (m!=N):
         print("Trust matrix should be squared and number of agents should be consistent in T and P0.")
-        return
-    rowsum = np.sum(T,axis=1)
-    if (np.any(rowsum != np.ones(N))) or (np.any(T<0)):
-        print("Trust matrix should be row-stochastic, that is rows need to add up to one and have non-negative entries.")
         return
     t = 1
     N = P0.size
@@ -558,6 +618,42 @@ def time_to_convergence(T,P0,final_beliefs=False,tolerance=0,max_iter=10000):
         return t, P0
     else:
         return t
+
+# This function is only to generate the nice plots above
+# It does not really perform anything substantial in relation to the learning model
+   
+def plot_trust_network(TT,p): 
+    G = nx.convert_matrix.from_numpy_matrix(TT,create_using=nx.MultiDiGraph,
+                                             parallel_edges=True)
+    plt.figure(figsize=(5,5))    
+    pos=nx.circular_layout(G) 
+    # draw nodes and labels
+    nx.draw_networkx_nodes(G,pos,cmap=plt.get_cmap('viridis'),vmin=0, vmax=1, node_color=p,node_size=300)
+   
+    nl = nx.draw_networkx_labels(G,font_color='white', font_weight='bold',
+                              pos=pos,with_labels = True,node_size=300)
+    # Consider all possible weights, to adjust width.
+    weights = []
+    for (n1,n2,df) in G.edges(data=True):
+        weights.append(df['weight']) 
+ 
+    unique_weights = list(set(weights))
+    # Plot all edges of each weight with a given width
+    for weight in unique_weights:
+        weighted_edges = [(n1,n2) for (n1,n2,edge_attribute) in G.edges(data=True) if edge_attribute['weight']==weight]
+        width = weight*len(G.nodes())*2.0/sum(weights)
+        nx.draw_networkx_edges(G,pos,edgelist=weighted_edges,width=width,connectionstyle='arc3,rad=0.2')
+    plt.axis('off')
+    cmap = plt.cm.get_cmap('viridis')
+    colors = cmap(np.arange(cmap.N))
+    plt.show()
+    plt.figure(figsize=(5,5))    
+
+    plt.imshow([colors], extent=[0, 1, 0, .1])
+    plt.yticks([0,.1], " ")
+    plt.xlabel("Belief/Opinion (Pi)")
+    plt.show()
+    
     
 #---------------------------------#
 # INTERACTIVE INTERFACE FUNCTIONS # 
